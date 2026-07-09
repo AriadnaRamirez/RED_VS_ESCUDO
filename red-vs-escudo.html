@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RED vs ESCUDO — Serpientes &amp; Escaleras de Ciberseguridad</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg:#0a0e14;
+    --panel:#0f1621;
+    --panel-2:#131c29;
+    --line:#1e2a3a;
+    --text:#dbe7f2;
+    --muted:#5b6b82;
+    --hacker:#ff3b5c;
+    --hacker-glow:rgba(255,59,92,.35);
+    --agent:#00d9ff;
+    --agent-glow:rgba(0,217,255,.35);
+    --ok:#00ff9d;
+    --p1:#00ff9d;
+    --p2:#ffb020;
+    --p3:#00d9ff;
+    --p4:#c77dff;
+    --mono:'JetBrains Mono', monospace;
+    --sans:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(0,217,255,.10), transparent 60%),
+      radial-gradient(ellipse 900px 500px at 100% 10%, rgba(255,59,92,.10), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    padding:24px;
+  }
+
+  /* ---------- Header ---------- */
+  .topbar{
+    max-width:1180px;margin:0 auto 18px auto;
+    border:1px solid var(--line); border-radius:10px;
+    background:var(--panel);
+    padding:14px 18px;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--hacker); box-shadow:0 0 12px var(--hacker-glow); animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .brand h1{
+    font-family:var(--mono); font-weight:800; font-size:20px; letter-spacing:.5px; margin:0;
+    color:#fff;
+  }
+  .brand h1 span{color:var(--agent);}
+  .brand small{display:block; font-family:var(--mono); color:var(--muted); font-size:11px; letter-spacing:1px; margin-top:2px;}
+  .legend{display:flex; gap:18px; font-family:var(--mono); font-size:12px; color:var(--muted); flex-wrap:wrap;}
+  .legend .item{display:flex; align-items:center; gap:6px;}
+  .legend .sw{width:14px;height:3px;border-radius:2px;}
+
+  /* ---------- Layout ---------- */
+  .layout{
+    max-width:1180px; margin:0 auto;
+    display:grid; grid-template-columns: 1fr 340px; gap:18px;
+  }
+  @media (max-width: 900px){ .layout{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px;
+  }
+
+  /* ---------- Board ---------- */
+  .board-wrap{position:relative; width:100%; aspect-ratio:1/1;}
+  .board{
+    position:relative; width:100%; height:100%;
+    display:grid; grid-template-columns:repeat(10,1fr); grid-template-rows:repeat(10,1fr);
+    border-radius:6px; overflow:hidden; border:1px solid var(--line);
+    background:var(--panel-2);
+  }
+  .cell{
+    position:relative; border:1px solid rgba(255,255,255,.03);
+    display:flex; align-items:flex-start; justify-content:flex-end;
+    padding:3px 5px;
+    font-family:var(--mono); font-size:10px; color:var(--muted);
+  }
+  .cell.alt{background:rgba(255,255,255,.015);}
+  .cell.start{background:rgba(0,255,157,.07);}
+  .cell.finish{background:rgba(0,217,255,.10);}
+  .cell .badge{
+    position:absolute; bottom:3px; left:4px; font-size:9px; padding:1px 4px; border-radius:3px;
+    font-family:var(--mono); letter-spacing:.5px;
+  }
+  .cell .badge.head{background:var(--hacker-glow); color:var(--hacker); border:1px solid var(--hacker);}
+  .cell .badge.foot{background:var(--agent-glow); color:var(--agent); border:1px solid var(--agent);}
+
+  svg.overlay{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
+
+  .tokens-layer{position:absolute; inset:0; pointer-events:none;}
+  .token{
+    position:absolute; width:7.5%; height:7.5%; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-weight:800; font-size:11px; color:#04121a;
+    border:2px solid rgba(255,255,255,.85);
+    transition: left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1);
+    box-shadow:0 3px 10px rgba(0,0,0,.5);
+    z-index:5;
+  }
+  .token.p1{background:var(--p1); box-shadow:0 0 14px rgba(0,255,157,.6);}
+  .token.p2{background:var(--p2); box-shadow:0 0 14px rgba(255,176,32,.6);}
+  .token.p3{background:var(--p3); box-shadow:0 0 14px rgba(0,217,255,.6);}
+  .token.p4{background:var(--p4); box-shadow:0 0 14px rgba(199,125,255,.6);}
+  .token.cpu-token{background:var(--hacker); box-shadow:0 0 14px var(--hacker-glow);}
+
+  /* ---------- Side panel ---------- */
+  .side{display:flex; flex-direction:column; gap:16px;}
+  .card-title{
+    font-family:var(--mono); font-size:11px; letter-spacing:1.5px; color:var(--muted);
+    text-transform:uppercase; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;
+  }
+  .card-title::before{content:'>'; color:var(--agent);}
+
+  .players{display:flex; flex-direction:column; gap:10px;}
+  .player-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2);
+    transition:.2s;
+  }
+  .player-row.active{border-color:var(--agent); box-shadow:0 0 0 1px var(--agent) inset, 0 0 16px rgba(0,217,255,.15);}
+  .player-row .who{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-weight:700; font-size:13px;}
+  .swatch{width:14px;height:14px;border-radius:50%;}
+  .player-row .pos{font-family:var(--mono); font-size:13px; color:var(--muted);}
+
+  .dice-zone{display:flex; flex-direction:column; align-items:center; gap:14px;}
+  .dice{
+    width:84px; height:84px; border-radius:16px; background:var(--panel-2);
+    border:1px solid var(--line);
+    display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
+    padding:12px; gap:4px;
+  }
+  .pip{width:100%; height:100%; border-radius:50%; background:transparent;}
+  .pip.on{background:var(--agent); box-shadow:0 0 8px var(--agent-glow);}
+  .dice.rolling{animation:shake .5s infinite;}
+  @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}
+
+  button{
+    font-family:var(--mono); font-weight:700; letter-spacing:.5px; font-size:13px;
+    border:1px solid var(--agent); color:var(--agent); background:rgba(0,217,255,.06);
+    padding:12px 18px; border-radius:8px; cursor:pointer; transition:.15s;
+  }
+  button:hover:not(:disabled){background:rgba(0,217,255,.16); box-shadow:0 0 16px rgba(0,217,255,.25);}
+  button:disabled{opacity:.35; cursor:not-allowed;}
+  button.ghost{border-color:var(--line); color:var(--muted); background:transparent;}
+  button.ghost:hover{color:var(--text); border-color:var(--muted); box-shadow:none;}
+  button.danger{border-color:var(--hacker); color:var(--hacker); background:rgba(255,59,92,.06);}
+  button.danger:hover{background:rgba(255,59,92,.16); box-shadow:0 0 16px rgba(255,59,92,.25);}
+
+  .status-line{font-family:var(--mono); font-size:12px; color:var(--muted); min-height:16px; text-align:center;}
+  .status-line b{color:var(--text);}
+
+  .log{
+    background:#050810; border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; height:150px; overflow-y:auto;
+    font-family:var(--mono); font-size:11.5px; line-height:1.6; color:#7ea0c2;
+  }
+  .log div{white-space:pre-wrap;}
+  .log .sys{color:var(--muted);}
+  .log .good{color:var(--ok);}
+  .log .bad{color:var(--hacker);}
+  .log::-webkit-scrollbar{width:6px;}
+  .log::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
+
+  .setup-row{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .setup-row button{width:100%;}
+  .mode-btn[data-mode="cpu"]{border-color:var(--hacker); color:var(--hacker); background:rgba(255,59,92,.06);}
+  .mode-btn[data-mode="cpu"]:hover:not(:disabled){background:rgba(255,59,92,.16); box-shadow:0 0 16px rgba(255,59,92,.25);}
+  .difficulty-btn{border-color:var(--hacker); color:var(--hacker); background:rgba(255,59,92,.06);}
+  .difficulty-btn:hover:not(:disabled){background:rgba(255,59,92,.16); box-shadow:0 0 16px rgba(255,59,92,.25);}
+
+  .thinking-dots::after{
+    content:'';
+    display:inline-block;
+    animation:dots 1.2s steps(4,end) infinite;
+    width:1em; text-align:left;
+  }
+  @keyframes dots{
+    0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} 100%{content:'';}
+  }
+
+  /* ---------- Modal (pregunta) ---------- */
+  .modal-bg{
+    position:fixed; inset:0; background:rgba(3,6,12,.82); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .modal-bg.show{display:flex;}
+  .modal{
+    width:100%; max-width:560px; background:var(--panel); border:1px solid var(--agent);
+    border-radius:12px; box-shadow:0 0 40px rgba(0,217,255,.25);
+    overflow:hidden;
+  }
+  .modal-head{
+    background:var(--panel-2); padding:10px 16px; display:flex; align-items:center; gap:10px;
+    border-bottom:1px solid var(--line); font-family:var(--mono); font-size:11px; color:var(--muted);
+  }
+  .modal-head .lights{display:flex; gap:6px;}
+  .modal-head .lights span{width:9px;height:9px;border-radius:50%; background:#2a3444;}
+  .modal-body{padding:22px;}
+  .prompt{font-family:var(--mono); font-size:12px; color:var(--agent); margin-bottom:6px;}
+  .qtext{font-size:16px; line-height:1.5; margin:0 0 18px 0; color:#fff;}
+  .qtag{
+    display:inline-block; font-family:var(--mono); font-size:10px; color:var(--muted);
+    border:1px solid var(--line); padding:2px 8px; border-radius:20px; margin-bottom:12px;
+  }
+  .options{display:flex; flex-direction:column; gap:8px;}
+  .opt{
+    text-align:left; border:1px solid var(--line); background:var(--panel-2); color:var(--text);
+    padding:12px 14px; border-radius:8px; cursor:pointer; font-family:var(--sans); font-size:14px;
+    display:flex; gap:10px; transition:.15s;
+  }
+  .opt:hover:not(:disabled){border-color:var(--agent);}
+  .opt .k{font-family:var(--mono); color:var(--muted);}
+  .opt.correct{border-color:var(--ok); background:rgba(0,255,157,.08); color:var(--ok);}
+  .opt.wrong{border-color:var(--hacker); background:rgba(255,59,92,.08); color:var(--hacker);}
+  .modal-foot{padding:14px 22px 22px; display:flex; justify-content:flex-end;}
+  .feedback{font-family:var(--mono); font-size:13px; margin-top:14px; min-height:20px; line-height:1.6;}
+  .feedback.good{color:var(--ok);}
+  .feedback.bad{color:var(--hacker);}
+
+  .cursor{display:inline-block; width:7px; height:14px; background:var(--agent); margin-left:2px; animation:blink 1s steps(1) infinite; vertical-align:-2px;}
+  @keyframes blink{50%{opacity:0}}
+
+  .win-bg{position:fixed; inset:0; background:rgba(3,6,12,.9); display:none; align-items:center; justify-content:center; z-index:60;}
+  .win-bg.show{display:flex;}
+  .win-card{background:var(--panel); border:1px solid var(--ok); border-radius:14px; padding:36px; text-align:center; max-width:420px; box-shadow:0 0 50px rgba(0,255,157,.3);}
+  .win-card h2{font-family:var(--mono); color:var(--ok); margin:0 0 8px;}
+  .win-card p{color:var(--muted); margin:0 0 20px;}
+
+  footer{max-width:1180px; margin:18px auto 0; text-align:center; font-family:var(--mono); font-size:11px; color:var(--muted);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="dot"></div>
+    <div>
+      <h1>RED <span>vs</span> ESCUDO</h1>
+      <small>SIMULACRO DE DEFENSA · CIBERSEGURIDAD &amp; REDES CISCO</small>
+    </div>
+  </div>
+  <div class="legend">
+    <div class="item"><span class="sw" style="background:var(--hacker)"></span> Serpiente = ataque del Hacker (retrocede)</div>
+    <div class="item"><span class="sw" style="background:var(--agent)"></span> Escalera = Agente de Ciberseguridad (avanza)</div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="panel">
+    <div class="board-wrap">
+      <div class="board" id="board"></div>
+      <svg class="overlay" id="overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg>
+      <div class="tokens-layer" id="tokensLayer"></div>
+    </div>
+  </div>
+
+  <div class="side">
+
+    <div class="panel" id="setupPanel">
+      <p class="card-title">Nueva partida</p>
+
+      <div id="modeStep">
+        <div class="status-line" style="margin-bottom:10px;">Elige el modo de juego.</div>
+        <div class="setup-row" style="flex-wrap:wrap;">
+          <button class="mode-btn" data-mode="human">👥 Multijugador</button>
+          <button class="mode-btn" data-mode="cpu">🤖 VS Computadora</button>
+        </div>
+      </div>
+
+      <div id="humanStep" style="display:none;">
+        <div class="status-line" style="margin:14px 0 10px;">Elige cuántos agentes juegan (1 a 4) y comienza la defensa de la red.</div>
+        <div class="setup-row" style="flex-wrap:wrap;">
+          <button class="players-btn" data-n="1">1 Jugador</button>
+          <button class="players-btn" data-n="2">2 Jugadores</button>
+          <button class="players-btn" data-n="3">3 Jugadores</button>
+          <button class="players-btn" data-n="4">4 Jugadores</button>
+        </div>
+        <button class="ghost back-step-btn" style="width:100%; margin-top:10px;">← Volver</button>
+      </div>
+
+      <div id="cpuStep" style="display:none;">
+        <div class="status-line" style="margin:14px 0 10px;">Elige el nivel de la IA rival. Tú controlas al agente de ciberseguridad; la computadora responde sola a sus verificaciones de acceso.</div>
+        <div class="setup-row" style="grid-template-columns:1fr 1fr 1fr;">
+          <button class="difficulty-btn" data-acc="0.35">Fácil</button>
+          <button class="difficulty-btn" data-acc="0.6">Normal</button>
+          <button class="difficulty-btn" data-acc="0.85">Difícil</button>
+        </div>
+        <button class="ghost back-step-btn" style="width:100%; margin-top:10px;">← Volver</button>
+      </div>
+    </div>
+
+    <div class="panel" id="gamePanel" style="display:none;">
+      <p class="card-title">Agentes en la red</p>
+      <div class="players" id="playersBox"></div>
+    </div>
+
+    <div class="panel" id="dicePanel" style="display:none;">
+      <p class="card-title">Terminal de acceso</p>
+      <div class="dice-zone">
+        <div class="dice" id="dice">
+          <div class="pip" data-p="1"></div><div class="pip" data-p="2"></div><div class="pip" data-p="3"></div>
+          <div class="pip" data-p="4"></div><div class="pip" data-p="5"></div><div class="pip" data-p="6"></div>
+          <div class="pip" data-p="7"></div><div class="pip" data-p="8"></div><div class="pip" data-p="9"></div>
+        </div>
+        <button id="rollBtn">$ tirar_dado()</button>
+        <div class="status-line" id="statusLine">Presiona el botón para lanzar el dado.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="card-title">Registro del sistema</p>
+      <div class="log" id="log"></div>
+      <div style="margin-top:10px; display:flex; gap:8px;">
+        <button class="ghost" id="restartBtn" style="flex:1;">↻ Reiniciar partida</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>RED vs ESCUDO — juego educativo independiente · preguntas basadas en fundamentos de ciberseguridad y redes · 100% offline, sin conexión requerida tras la carga</footer>
+
+<!-- Modal de pregunta -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="lights"><span></span><span></span><span></span></div>
+      <span id="modalTurnLabel">terminal://verificacion-de-acceso</span>
+    </div>
+    <div class="modal-body">
+      <div class="prompt">$ autenticar_movimiento --casillas=<span id="stepsNeeded">0</span></div>
+      <div class="qtag" id="qTag">Tema</div>
+      <p class="qtext" id="qText">Cargando pregunta...<span class="cursor"></span></p>
+      <div class="options" id="optionsBox"></div>
+      <div class="feedback" id="feedback"></div>
+    </div>
+    <div class="modal-foot">
+      <button id="continueBtn" style="display:none;">Continuar →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de victoria -->
+<div class="win-bg" id="winBg">
+  <div class="win-card">
+    <h2 id="winTitle">¡RED ASEGURADA!</h2>
+    <p id="winText">El agente alcanzó la casilla 100 y neutralizó al hacker.</p>
+    <button id="winRestart">Nueva partida</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   BANCO DE PREGUNTAS — Introducción a la Ciberseguridad
+   y Introducción a las Redes (fundamentos estilo Cisco)
+   ============================================================ */
+const QUESTIONS = [
+  {t:"Ciberseguridad", q:"¿Qué significa la sigla CIA en el contexto de seguridad de la información?", o:["Confidencialidad, Integridad, Disponibilidad", "Control, Inspección, Auditoría", "Cifrado, Identidad, Autenticación", "Copia, Instalación, Actualización"], c:0, exp:"La respuesta correcta es: confidencialidad, Integridad, Disponibilidad."},
+  {t:"Ciberseguridad", q:"¿Cómo se le llama a un correo fraudulento que intenta engañar al usuario para robar sus credenciales?", o:["Spam publicitario", "Phishing", "Firmware", "Broadcast"], c:1, exp:"La respuesta correcta es: phishing."},
+  {t:"Ciberseguridad", q:"Un software que se disfraza de programa legítimo pero realiza acciones maliciosas se conoce como:", o:["Gusano (worm)", "Antivirus", "Troyano", "Firewall"], c:2, exp:"La respuesta correcta es: troyano."},
+  {t:"Ciberseguridad", q:"¿Cuál es la principal diferencia entre un virus y un gusano informático?", o:["El gusano se propaga solo, sin necesidad de un archivo anfitrión", "El virus solo afecta a routers", "El gusano no puede replicarse", "No existe diferencia"], c:0, exp:"La respuesta correcta es: el gusano se propaga solo, sin necesidad de un archivo anfitrión."},
+  {t:"Ciberseguridad", q:"El ransomware se caracteriza principalmente por:", o:["Mostrar anuncios no deseados", "Cifrar los archivos de la víctima y exigir un rescate", "Monitorear el tráfico de red sin alterar archivos", "Acelerar el rendimiento del equipo"], c:1, exp:"La respuesta correcta es: cifrar los archivos de la víctima y exigir un rescate."},
+  {t:"Ciberseguridad", q:"La ingeniería social en ciberseguridad se refiere a:", o:["Programar redes sociales", "Manipular psicológicamente a las personas para obtener información", "Instalar actualizaciones automáticas", "Configurar servidores web"], c:1, exp:"La respuesta correcta es: manipular psicológicamente a las personas para obtener información."},
+  {t:"Ciberseguridad", q:"¿Qué es la autenticación de múltiples factores (MFA)?", o:["Usar la misma contraseña en varios sitios", "Verificar la identidad con dos o más métodos distintos", "Un tipo de firewall", "Un protocolo de enrutamiento"], c:1, exp:"La respuesta correcta es: verificar la identidad con dos o más métodos distintos."},
+  {t:"Ciberseguridad", q:"¿Cuál de las siguientes es una buena práctica para crear contraseñas seguras?", o:["Usar el nombre de tu mascota", "Combinar mayúsculas, minúsculas, números y símbolos, con longitud suficiente", "Usar la misma contraseña en todas las cuentas", "Escribirla en un post-it pegado al monitor"], c:1, exp:"La respuesta correcta es: combinar mayúsculas, minúsculas, números y símbolos, con longitud suficiente."},
+  {t:"Ciberseguridad", q:"Un ataque de 'fuerza bruta' consiste en:", o:["Probar sistemáticamente combinaciones de contraseñas hasta acertar", "Enviar correos falsos", "Interceptar tráfico cifrado sin esfuerzo", "Modificar el hardware del servidor"], c:0, exp:"La respuesta correcta es: probar sistemáticamente combinaciones de contraseñas hasta acertar."},
+  {t:"Ciberseguridad", q:"¿Qué función cumple un firewall en una red?", o:["Acelerar la conexión a internet", "Filtrar el tráfico de red según reglas de seguridad", "Almacenar copias de seguridad", "Asignar direcciones IP automáticamente"], c:1, exp:"La respuesta correcta es: filtrar el tráfico de red según reglas de seguridad."},
+  {t:"Ciberseguridad", q:"Un 'exploit' es:", o:["Un antivirus gratuito", "Un fragmento de código que aprovecha una vulnerabilidad", "Un protocolo de red seguro", "Un tipo de copia de seguridad"], c:1, exp:"La respuesta correcta es: un fragmento de código que aprovecha una vulnerabilidad."},
+  {t:"Ciberseguridad", q:"¿Qué es una vulnerabilidad de día cero (zero-day)?", o:["Una falla conocida y ya parchada hace años", "Una falla de seguridad desconocida para el fabricante, sin parche disponible", "Un virus que se activa el primer día del mes", "Un tipo de copia de respaldo"], c:1, exp:"La respuesta correcta es: una falla de seguridad desconocida para el fabricante, sin parche disponible."},
+  {t:"Ciberseguridad", q:"El 'spoofing' de dirección IP consiste en:", o:["Falsificar la dirección de origen de los paquetes de red", "Aumentar el ancho de banda", "Comprimir archivos grandes", "Cifrar el disco duro"], c:0, exp:"La respuesta correcta es: falsificar la dirección de origen de los paquetes de red."},
+  {t:"Ciberseguridad", q:"¿Qué es un ataque DDoS?", o:["Un ataque que satura un servicio con tráfico desde múltiples fuentes para dejarlo inaccesible", "Un método de cifrado de datos", "Una técnica de respaldo en la nube", "Un protocolo de enrutamiento dinámico"], c:0, exp:"La respuesta correcta es: un ataque que satura un servicio con tráfico desde múltiples fuentes para dejarlo inaccesible."},
+  {t:"Ciberseguridad", q:"La 'confidencialidad' en seguridad de la información busca garantizar que:", o:["Los datos estén siempre disponibles", "Solo personas autorizadas accedan a la información", "Los datos nunca se modifiquen", "La red tenga alta velocidad"], c:1, exp:"La respuesta correcta es: solo personas autorizadas accedan a la información."},
+  {t:"Ciberseguridad", q:"La 'integridad' de los datos busca garantizar que:", o:["La información no sea alterada de forma no autorizada", "Los datos se cifren automáticamente", "Los servidores nunca fallen", "Los usuarios cambien su contraseña cada día"], c:0, exp:"La respuesta correcta es: la información no sea alterada de forma no autorizada."},
+  {t:"Ciberseguridad", q:"¿Qué es el 'hashing' en criptografía?", o:["Un algoritmo reversible para comprimir archivos", "Una función que convierte datos en una cadena de longitud fija, prácticamente irreversible", "Un protocolo de enrutamiento", "Un tipo de malware"], c:1, exp:"La respuesta correcta es: una función que convierte datos en una cadena de longitud fija, prácticamente irreversible."},
+  {t:"Ciberseguridad", q:"La diferencia entre cifrado simétrico y asimétrico es que el asimétrico:", o:["Usa la misma clave para cifrar y descifrar", "Usa un par de claves, una pública y una privada", "No requiere ninguna clave", "Solo sirve para redes inalámbricas"], c:1, exp:"La respuesta correcta es: usa un par de claves, una pública y una privada."},
+  {t:"Ciberseguridad", q:"¿Qué es un 'honeypot' en ciberseguridad?", o:["Un sistema señuelo diseñado para atraer y estudiar a atacantes", "Un tipo de antivirus gratuito", "Un protocolo de cifrado", "Un cable de red especial"], c:0, exp:"La respuesta correcta es: un sistema señuelo diseñado para atraer y estudiar a atacantes."},
+  {t:"Ciberseguridad", q:"Un 'keylogger' es un tipo de malware que:", o:["Registra las pulsaciones del teclado del usuario", "Acelera el sistema operativo", "Bloquea anuncios emergentes", "Actualiza automáticamente el firmware"], c:0, exp:"La respuesta correcta es: registra las pulsaciones del teclado del usuario."},
+  {t:"Ciberseguridad", q:"El principio de 'mínimo privilegio' establece que:", o:["Todos los usuarios deben tener acceso de administrador", "Cada usuario debe tener solo los permisos necesarios para su función", "Las contraseñas deben cambiarse cada hora", "Los firewalls deben desactivarse por defecto"], c:1, exp:"La respuesta correcta es: cada usuario debe tener solo los permisos necesarios para su función."},
+  {t:"Ciberseguridad", q:"¿Qué diferencia a un 'hacker de sombrero blanco' de uno de 'sombrero negro'?", o:["El de sombrero blanco actúa con autorización para mejorar la seguridad", "No existe diferencia real", "El de sombrero blanco solo ataca bancos", "El de sombrero negro trabaja para empresas de antivirus"], c:0, exp:"La respuesta correcta es: el de sombrero blanco actúa con autorización para mejorar la seguridad."},
+  {t:"Ciberseguridad", q:"Un plan de 'respuesta a incidentes' sirve principalmente para:", o:["Vender productos de seguridad", "Detectar, contener y recuperar la operación tras un ataque", "Diseñar logotipos corporativos", "Configurar impresoras en red"], c:1, exp:"La respuesta correcta es: detectar, contener y recuperar la operación tras un ataque."},
+  {t:"Ciberseguridad", q:"¿Qué es la 'superficie de ataque' de un sistema?", o:["El conjunto de puntos por donde un atacante podría intentar entrar", "El tamaño físico del servidor", "La velocidad de la red", "El número de usuarios registrados"], c:0, exp:"La respuesta correcta es: el conjunto de puntos por donde un atacante podría intentar entrar."},
+  {t:"Ciberseguridad", q:"Las copias de seguridad (backups) son importantes principalmente porque:", o:["Permiten recuperar información ante pérdida, fallo o ataque como ransomware", "Aumentan la velocidad de internet", "Reemplazan la necesidad de contraseñas", "Eliminan virus automáticamente"], c:0, exp:"La respuesta correcta es: permiten recuperar información ante pérdida, fallo o ataque como ransomware."},
+  {t:"Redes (Cisco)", q:"¿Cuántas capas tiene el modelo OSI?", o:["5", "7", "4", "9"], c:1, exp:"La respuesta correcta es: 7."},
+  {t:"Redes (Cisco)", q:"¿En qué capa del modelo OSI opera un switch tradicional (no gestionado con enrutamiento)?", o:["Capa 3 - Red", "Capa 2 - Enlace de datos", "Capa 7 - Aplicación", "Capa 1 - Física"], c:1, exp:"La respuesta correcta es: capa 2 - Enlace de datos."},
+  {t:"Redes (Cisco)", q:"Un router opera principalmente en la capa:", o:["Capa 2 - Enlace de datos", "Capa 3 - Red", "Capa 5 - Sesión", "Capa 6 - Presentación"], c:1, exp:"La respuesta correcta es: capa 3 - Red."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo se utiliza para traducir nombres de dominio a direcciones IP?", o:["DHCP", "DNS", "FTP", "SNMP"], c:1, exp:"La respuesta correcta es: DNS."},
+  {t:"Redes (Cisco)", q:"¿Qué función cumple el protocolo DHCP?", o:["Asignar direcciones IP automáticamente a los dispositivos", "Cifrar el tráfico web", "Traducir nombres de dominio", "Enviar correo electrónico"], c:0, exp:"La respuesta correcta es: asignar direcciones IP automáticamente a los dispositivos."},
+  {t:"Redes (Cisco)", q:"¿Cuál es la diferencia principal entre TCP y UDP?", o:["TCP es orientado a conexión y confiable; UDP no garantiza entrega", "UDP siempre es más lento que TCP", "TCP no usa puertos", "No hay diferencia, son el mismo protocolo"], c:0, exp:"La respuesta correcta es: tCP es orientado a conexión y confiable; UDP no garantiza entrega."},
+  {t:"Redes (Cisco)", q:"¿Cuál es la dirección IP de loopback estándar en IPv4?", o:["192.168.0.1", "127.0.0.1", "10.0.0.1", "255.255.255.0"], c:1, exp:"La respuesta correcta es: 127.0.0.1."},
+  {t:"Redes (Cisco)", q:"Una dirección IPv4 está compuesta por:", o:["8 bits", "16 bits", "32 bits", "64 bits"], c:2, exp:"La respuesta correcta es: 32 bits."},
+  {t:"Redes (Cisco)", q:"¿Qué es una dirección MAC?", o:["Un identificador lógico asignado por el ISP", "Un identificador físico único de la tarjeta de red", "Un tipo de dirección IP privada", "Un protocolo de enrutamiento"], c:1, exp:"La respuesta correcta es: un identificador físico único de la tarjeta de red."},
+  {t:"Redes (Cisco)", q:"¿Qué dispositivo de red divide dominios de colisión en una LAN?", o:["Hub", "Switch", "Repetidor", "Módem"], c:1, exp:"La respuesta correcta es: switch."},
+  {t:"Redes (Cisco)", q:"¿Cuál es el puerto por defecto del protocolo HTTPS?", o:["21", "80", "443", "25"], c:2, exp:"La respuesta correcta es: 443."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo se usa para transferir páginas web de forma cifrada?", o:["HTTP", "HTTPS", "FTP", "Telnet"], c:1, exp:"La respuesta correcta es: HTTPS."},
+  {t:"Redes (Cisco)", q:"¿Cuál de estas es una dirección IP privada según los rangos reservados?", o:["8.8.8.8", "192.168.1.1", "172.217.0.1", "1.1.1.1"], c:1, exp:"La respuesta correcta es: 192.168.1.1."},
+  {t:"Redes (Cisco)", q:"La máscara de subred 255.255.255.0 corresponde a un prefijo:", o:["/16", "/24", "/8", "/32"], c:1, exp:"La respuesta correcta es: /24."},
+  {t:"Redes (Cisco)", q:"¿Qué es una VLAN?", o:["Una red física separada por cableado", "Una red de área local virtual que segmenta el tráfico lógicamente", "Un tipo de cable de fibra óptica", "Un protocolo de cifrado"], c:1, exp:"La respuesta correcta es: una red de área local virtual que segmenta el tráfico lógicamente."},
+  {t:"Redes (Cisco)", q:"¿Qué topología de red conecta todos los dispositivos a un punto central?", o:["Anillo", "Estrella", "Bus", "Malla completa"], c:1, exp:"La respuesta correcta es: estrella."},
+  {t:"Redes (Cisco)", q:"El protocolo Telnet se considera inseguro principalmente porque:", o:["Es muy lento", "Transmite los datos, incluidas credenciales, sin cifrar", "No funciona en redes LAN", "Requiere fibra óptica"], c:1, exp:"La respuesta correcta es: transmite los datos, incluidas credenciales, sin cifrar."},
+  {t:"Redes (Cisco)", q:"¿Qué reemplaza de forma segura al protocolo Telnet para administración remota?", o:["FTP", "SSH", "SMTP", "ICMP"], c:1, exp:"La respuesta correcta es: SSH."},
+  {t:"Redes (Cisco)", q:"¿Cuál es la función principal de un servidor proxy?", o:["Actuar como intermediario entre el cliente e internet", "Asignar direcciones MAC", "Cifrar discos duros", "Enrutar paquetes entre continentes exclusivamente"], c:0, exp:"La respuesta correcta es: actuar como intermediario entre el cliente e internet."},
+  {t:"Redes (Cisco)", q:"¿Qué es una VPN?", o:["Una red que crea un túnel cifrado sobre una red pública", "Un tipo de virus", "Un protocolo de asignación de IP", "Un dispositivo físico de almacenamiento"], c:0, exp:"La respuesta correcta es: una red que crea un túnel cifrado sobre una red pública."},
+  {t:"Redes (Cisco)", q:"El comando 'ping' se utiliza principalmente para:", o:["Verificar la conectividad entre dos dispositivos de red", "Configurar una VLAN", "Cifrar el tráfico de red", "Asignar direcciones IP"], c:0, exp:"La respuesta correcta es: verificar la conectividad entre dos dispositivos de red."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo de la capa de aplicación se usa para enviar correo electrónico?", o:["SMTP", "DNS", "DHCP", "ARP"], c:0, exp:"La respuesta correcta es: SMTP."},
+  {t:"Redes (Cisco)", q:"El protocolo ARP se utiliza para:", o:["Resolver una dirección IP a su dirección MAC correspondiente", "Cifrar contraseñas", "Enviar correo electrónico", "Asignar nombres de dominio"], c:0, exp:"La respuesta correcta es: resolver una dirección IP a su dirección MAC correspondiente."},
+  {t:"Redes (Cisco)", q:"En el modelo TCP/IP (de 4 capas), ¿cuál NO es una de sus capas?", o:["Acceso a la red", "Internet", "Presentación", "Transporte"], c:2, exp:"La respuesta correcta es: presentación."},
+  {t:"Redes (Cisco)", q:"¿Qué significa que un router realice NAT (Network Address Translation)?", o:["Traduce direcciones IP privadas a una IP pública para salir a internet", "Cifra el tráfico de voz sobre IP", "Bloquea todos los puertos entrantes", "Asigna nombres a los dispositivos"], c:0, exp:"La respuesta correcta es: traduce direcciones IP privadas a una IP pública para salir a internet."},
+  {t:"Redes (Cisco)", q:"¿Qué es un ancho de banda en una red?", o:["La distancia máxima que puede recorrer una señal", "La cantidad máxima de datos que puede transmitirse en un tiempo determinado", "El número de dispositivos conectados", "El tipo de cifrado utilizado"], c:1, exp:"La respuesta correcta es: la cantidad máxima de datos que puede transmitirse en un tiempo determinado."},
+  {t:"Redes (Cisco)", q:"Un switch gestionado permite, entre otras cosas:", o:["Configurar VLANs y monitorear el tráfico", "Únicamente encender y apagar puertos físicos", "Cifrar automáticamente todo el tráfico", "Reemplazar al router en todos los casos"], c:0, exp:"La respuesta correcta es: configurar VLANs y monitorear el tráfico."},
+  {t:"Redes (Cisco)", q:"¿Cuál de los siguientes es un protocolo de enrutamiento dinámico?", o:["OSPF", "HTTP", "FTP", "DNS"], c:0, exp:"La respuesta correcta es: OSPF."},
+  {t:"Fundamentos", q:"¿Cuáles son los tres principios fundamentales del modelo CIA en ciberseguridad?", o:["Confidencialidad, Integridad y Disponibilidad", "Autenticación, Autorización y Auditoría", "Cifrado, Compresión y Respaldo", "Firewall, Antivirus y VPN"], c:0, exp:"El modelo CIA se basa en Confidencialidad, Integridad y Disponibilidad, los tres pilares de la seguridad de la información."},
+  {t:"Fundamentos", q:"¿Qué busca proteger la confidencialidad de la información?", o:["Que solo las personas autorizadas puedan acceder a ella", "Que los datos nunca se pierdan", "Que la red tenga alta velocidad", "Que el sistema esté siempre encendido"], c:0, exp:"La confidencialidad garantiza que únicamente personas autorizadas puedan acceder a la información."},
+  {t:"Fundamentos", q:"¿Qué significa que un dato mantenga su integridad?", o:["Que esté disponible las 24 horas", "Que no haya sido modificado sin autorización", "Que esté cifrado con AES", "Que tenga una copia de respaldo"], c:1, exp:"La integridad significa que el dato no ha sido alterado sin autorización."},
+  {t:"Fundamentos", q:"¿Qué garantiza la disponibilidad de un sistema?", o:["Que los datos no se puedan copiar", "Que solo el administrador tenga acceso", "Que la información y los servicios estén accesibles cuando se necesiten", "Que los datos estén cifrados"], c:2, exp:"La disponibilidad asegura que la información y los servicios estén accesibles cuando se necesiten."},
+  {t:"Fundamentos", q:"¿Qué es una vulnerabilidad?", o:["Una debilidad que puede ser aprovechada por un atacante", "Un tipo de firewall", "Una copia de seguridad automática", "Un protocolo de cifrado"], c:0, exp:"Una vulnerabilidad es una debilidad en un sistema que puede ser aprovechada por un atacante."},
+  {t:"Fundamentos", q:"¿Qué es una amenaza en ciberseguridad?", o:["Un evento o acción que puede causar daño a un sistema", "Una actualización de software", "Un tipo de contraseña", "Un dispositivo de red"], c:0, exp:"Una amenaza es cualquier evento o acción con potencial de causar daño a un sistema."},
+  {t:"Fundamentos", q:"¿Qué es un riesgo en ciberseguridad?", o:["La probabilidad de que una amenaza explote una vulnerabilidad", "Un tipo de malware", "Una copia de seguridad", "Un protocolo de enrutamiento"], c:0, exp:"El riesgo es la probabilidad de que una amenaza aproveche una vulnerabilidad y cause daño."},
+  {t:"Fundamentos", q:"¿Qué es un activo de información?", o:["Cualquier recurso valioso que contiene o procesa información", "Un tipo de virus", "Un protocolo de red", "Una contraseña débil"], c:0, exp:"Un activo de información es cualquier recurso valioso que contiene o procesa datos de la organización."},
+  {t:"Fundamentos", q:"¿Qué significa autenticación?", o:["Determinar los permisos que tiene un usuario", "Verificar la identidad de un usuario", "Cifrar los datos de un usuario", "Registrar los eventos del sistema"], c:1, exp:"La autenticación verifica que un usuario es quien dice ser."},
+  {t:"Fundamentos", q:"¿Qué significa autorización?", o:["Verificar la identidad de un usuario", "Determinar los permisos que tiene un usuario", "Crear una copia de seguridad", "Filtrar el tráfico de red"], c:1, exp:"La autorización determina qué permisos y accesos tiene un usuario ya autenticado."},
+  {t:"Fundamentos", q:"¿Qué es un firewall?", o:["Un sistema que filtra el tráfico de red según reglas de seguridad", "Un tipo de malware", "Un protocolo de correo electrónico", "Un dispositivo que asigna IPs automáticamente"], c:0, exp:"Un firewall filtra el tráfico de red aplicando reglas de seguridad predefinidas."},
+  {t:"Fundamentos", q:"¿Qué función tiene un antivirus?", o:["Detectar, bloquear y eliminar software malicioso", "Asignar direcciones IP", "Cifrar el disco duro", "Traducir nombres de dominio"], c:0, exp:"Un antivirus detecta, bloquea y elimina software malicioso del sistema."},
+  {t:"Fundamentos", q:"¿Qué es malware?", o:["Software diseñado para dañar o comprometer un sistema", "Un protocolo de red seguro", "Una copia de seguridad", "Un tipo de firewall"], c:0, exp:"Malware es cualquier software diseñado para dañar o comprometer un sistema."},
+  {t:"Fundamentos", q:"¿Qué es un parche de seguridad?", o:["Una actualización que corrige vulnerabilidades", "Un tipo de malware", "Una copia de seguridad completa", "Un protocolo de enrutamiento"], c:0, exp:"Un parche de seguridad es una actualización de software que corrige vulnerabilidades conocidas."},
+  {t:"Fundamentos", q:"¿Qué significa el término backup?", o:["Copia de seguridad de la información", "Un tipo de ataque DDoS", "Un protocolo de cifrado", "Un dispositivo de red"], c:0, exp:"Backup es una copia de seguridad de la información para poder recuperarla ante pérdida o ataque."},
+  {t:"Redes (Cisco)", q:"¿Qué significa IP?", o:["Internet Protocol", "Internal Process", "Information Packet", "Internet Provider"], c:0, exp:"IP significa Internet Protocol, el protocolo que identifica y direcciona dispositivos en una red."},
+  {t:"Redes (Cisco)", q:"¿Qué identifica una dirección IP?", o:["Un dispositivo dentro de una red", "Un usuario específico", "Un archivo cifrado", "Un puerto de correo"], c:0, exp:"Una dirección IP identifica de forma lógica a un dispositivo dentro de una red."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo permite navegar de forma segura por Internet?", o:["HTTP", "HTTPS", "FTP", "Telnet"], c:1, exp:"HTTPS cifra la comunicación web, a diferencia de HTTP que la transmite en texto claro."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo utiliza HTTPS para cifrar la comunicación?", o:["SSH", "TLS", "ARP", "SNMP"], c:1, exp:"HTTPS usa TLS (antes SSL) para cifrar la comunicación entre cliente y servidor."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo traduce nombres de dominio en direcciones IP?", o:["DHCP", "DNS", "SMTP", "FTP"], c:1, exp:"DNS traduce nombres de dominio legibles en direcciones IP."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo asigna automáticamente direcciones IP a los dispositivos?", o:["DNS", "DHCP", "HTTP", "ARP"], c:1, exp:"DHCP asigna direcciones IP de forma automática a los dispositivos de la red."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo se utiliza para enviar correos electrónicos?", o:["IMAP", "POP3", "SMTP", "FTP"], c:2, exp:"SMTP es el protocolo estándar para enviar correo electrónico."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo permite recibir correo manteniéndolo sincronizado en el servidor?", o:["IMAP", "SMTP", "DNS", "DHCP"], c:0, exp:"IMAP sincroniza los correos con el servidor, a diferencia de POP3 que los descarga."},
+  {t:"Redes (Cisco)", q:"¿Qué protocolo permite transferir archivos de forma segura?", o:["FTP", "SFTP", "HTTP", "SMTP"], c:1, exp:"SFTP transfiere archivos de forma cifrada y segura, a diferencia del FTP tradicional."},
+  {t:"Redes (Cisco)", q:"¿Qué dispositivo conecta varias redes entre sí?", o:["Switch", "Router", "Hub", "Repetidor"], c:1, exp:"El router conecta y enruta tráfico entre distintas redes."},
+  {t:"Redes (Cisco)", q:"¿Qué dispositivo conecta equipos dentro de una misma red?", o:["Router", "Módem", "Switch", "Firewall de hardware"], c:2, exp:"El switch conecta dispositivos dentro de una misma red local (LAN)."},
+  {t:"Redes (Cisco)", q:"¿Qué tipo de herramienta es Wireshark?", o:["Un analizador de paquetes de red", "Un antivirus", "Un gestor de contraseñas", "Un servidor DNS"], c:0, exp:"Wireshark es un analizador de tráfico que captura y examina paquetes de múltiples protocolos de red."},
+  {t:"Redes (Cisco)", q:"¿Qué significa TCP?", o:["Transmission Control Protocol", "Total Connection Process", "Transfer Control Packet", "Terminal Connection Protocol"], c:0, exp:"TCP significa Transmission Control Protocol, un protocolo orientado a conexión y confiable."},
+  {t:"Redes (Cisco)", q:"¿Qué significa UDP?", o:["Universal Data Protocol", "User Datagram Protocol", "Unified Delivery Process", "User Data Packet"], c:1, exp:"UDP significa User Datagram Protocol, un protocolo sin conexión y sin garantía de entrega."},
+  {t:"Redes (Cisco)", q:"¿Cuál protocolo prioriza la velocidad sobre la confiabilidad?", o:["TCP", "UDP", "HTTP", "FTP"], c:1, exp:"UDP prioriza la velocidad y no garantiza la entrega de los datos, a diferencia de TCP."},
+  {t:"Contraseñas", q:"¿Cuál es una característica de una contraseña segura?", o:["Que sea corta y fácil de recordar", "Que sea larga, compleja y única", "Que use solo números", "Que se comparta con el equipo de trabajo"], c:1, exp:"Una contraseña segura debe ser larga, compleja y única para cada cuenta."},
+  {t:"Contraseñas", q:"¿Qué es MFA?", o:["Autenticación Multifactor", "Módulo de Filtrado Avanzado", "Método de Firewall Automático", "Migración de Fallos Activa"], c:0, exp:"MFA significa Autenticación Multifactor: verificar identidad con dos o más métodos."},
+  {t:"Contraseñas", q:"¿Qué añade el segundo factor de autenticación?", o:["Una capa adicional de seguridad", "Mayor velocidad de conexión", "Más espacio de almacenamiento", "Menor consumo de datos"], c:0, exp:"El segundo factor añade una capa adicional de seguridad más allá de la contraseña."},
+  {t:"Contraseñas", q:"¿Es recomendable reutilizar la misma contraseña en varias cuentas?", o:["Sí, siempre que sea larga", "No", "Solo en cuentas poco importantes", "Sí, si se cambia cada año"], c:1, exp:"No es recomendable: si una cuenta se ve comprometida, todas las que compartan esa contraseña quedan en riesgo."},
+  {t:"Contraseñas", q:"¿Qué herramienta ayuda a almacenar contraseñas de forma segura?", o:["Un gestor de contraseñas", "Un firewall", "Un servidor DNS", "Un antivirus"], c:0, exp:"Un gestor de contraseñas almacena y cifra las credenciales de forma segura."},
+  {t:"Ingeniería Social", q:"¿Qué es phishing?", o:["Un ataque para engañar a las personas y obtener información", "Un tipo de firewall", "Un protocolo de red", "Una técnica de respaldo"], c:0, exp:"Phishing es un ataque de ingeniería social que engaña a las personas para obtener información sensible."},
+  {t:"Ingeniería Social", q:"¿Qué es spear phishing?", o:["Un phishing masivo sin objetivo específico", "Un phishing dirigido a una persona específica", "Un ataque de fuerza bruta", "Un tipo de ransomware"], c:1, exp:"El spear phishing es un ataque de phishing dirigido y personalizado a una persona u organización específica."},
+  {t:"Ingeniería Social", q:"¿Qué es vishing?", o:["Phishing mediante llamadas telefónicas", "Phishing mediante mensajes SMS", "Phishing mediante redes sociales", "Un tipo de malware"], c:0, exp:"Vishing es phishing realizado mediante llamadas telefónicas (voice phishing)."},
+  {t:"Ingeniería Social", q:"¿Qué es smishing?", o:["Phishing mediante llamadas telefónicas", "Phishing mediante mensajes SMS", "Phishing mediante correo electrónico", "Un tipo de spyware"], c:1, exp:"Smishing es phishing realizado mediante mensajes SMS."},
+  {t:"Ingeniería Social", q:"¿Qué debe hacerse si un correo solicita credenciales de forma urgente?", o:["Responder de inmediato con los datos", "Verificar su autenticidad antes de responder", "Reenviarlo a varios contactos", "Ignorarlo sin reportarlo"], c:1, exp:"Ante urgencia sospechosa, siempre se debe verificar la autenticidad del remitente antes de responder."},
+  {t:"Malware", q:"¿Qué es un virus informático?", o:["Malware que necesita un archivo para propagarse", "Malware que se propaga automáticamente sin ayuda", "Un programa que cifra archivos", "Un sistema de detección de intrusos"], c:0, exp:"Un virus necesita un archivo anfitrión y la acción del usuario para propagarse."},
+  {t:"Malware", q:"¿Qué es un gusano (worm)?", o:["Malware que necesita un archivo anfitrión", "Malware que se propaga automáticamente por la red", "Un tipo de firewall", "Una técnica de cifrado"], c:1, exp:"Un gusano se propaga automáticamente por la red sin necesitar un archivo anfitrión."},
+  {t:"Malware", q:"¿Qué es un troyano?", o:["Malware que aparenta ser un programa legítimo", "Malware que se autorreplica sin ayuda", "Un protocolo de red inseguro", "Un tipo de copia de seguridad"], c:0, exp:"Un troyano se disfraza de programa legítimo para engañar al usuario e infectar el sistema."},
+  {t:"Malware", q:"¿Qué es ransomware?", o:["Malware que espía al usuario sin cifrar nada", "Malware que cifra archivos para exigir un rescate", "Un tipo de antivirus", "Un protocolo de enrutamiento"], c:1, exp:"El ransomware cifra los archivos de la víctima y exige un rescate para liberarlos."},
+  {t:"Malware", q:"¿Qué es spyware?", o:["Malware diseñado para espiar al usuario", "Malware que cifra archivos", "Un protocolo de correo", "Un dispositivo de red"], c:0, exp:"El spyware está diseñado para espiar la actividad del usuario sin su conocimiento."},
+  {t:"Malware", q:"¿Qué es un keylogger?", o:["Malware que registra las pulsaciones del teclado", "Malware que cifra el disco duro", "Un tipo de firewall", "Un protocolo de autenticación"], c:0, exp:"Un keylogger registra las pulsaciones del teclado para robar información como contraseñas."},
+  {t:"SOC e Investigación", q:"¿Qué significa IOC?", o:["Indicador de Compromiso", "Índice de Configuración", "Inspección de Contenido", "Identificador de Origen y Conexión"], c:0, exp:"IOC significa Indicador de Compromiso, evidencia de que un sistema fue vulnerado."},
+  {t:"SOC e Investigación", q:"¿Qué significa IOA?", o:["Indicador de Ataque", "Índice de Operación Activa", "Identificador de Origen de Ataque", "Inspección de Objetos y Accesos"], c:0, exp:"IOA significa Indicador de Ataque, señal de que un ataque está en curso."},
+  {t:"SOC e Investigación", q:"¿Qué hace un analista SOC?", o:["Diseña interfaces de usuario", "Monitorear, detectar e investigar incidentes de seguridad", "Instala cableado de red", "Administra bases de datos financieras"], c:1, exp:"Un analista SOC monitorea, detecta e investiga incidentes de seguridad en la organización."},
+  {t:"SOC e Investigación", q:"¿Qué herramienta centraliza eventos de seguridad?", o:["Un SIEM", "Un firewall", "Un router", "Un proxy"], c:0, exp:"Un SIEM centraliza y correlaciona los eventos de seguridad de toda la organización."},
+  {t:"SOC e Investigación", q:"¿Qué significa SIEM?", o:["Security Information and Event Management", "System Integration and Event Monitoring", "Secure Internet Email Management", "Server Identity and Encryption Module"], c:0, exp:"SIEM significa Security Information and Event Management."},
+  {t:"SOC e Investigación", q:"¿Qué es un log?", o:["Un registro de eventos", "Un tipo de malware", "Un protocolo de red", "Una clave de cifrado"], c:0, exp:"Un log es un registro de eventos generado por un sistema o aplicación."},
+  {t:"SOC e Investigación", q:"¿Qué significa correlacionar eventos en un SIEM?", o:["Eliminar registros antiguos", "Relacionar múltiples registros para detectar un incidente", "Cifrar los logs almacenados", "Enviar alertas por correo únicamente"], c:1, exp:"Correlacionar eventos significa relacionar múltiples registros para detectar patrones de un incidente."},
+  {t:"SOC e Investigación", q:"¿Qué es OSINT?", o:["Inteligencia obtenida de fuentes abiertas", "Un protocolo de cifrado", "Un tipo de malware", "Una red privada virtual"], c:0, exp:"OSINT es la inteligencia obtenida a partir de fuentes de información abiertas y públicas."},
+  {t:"SOC e Investigación", q:"¿Qué plataforma permite consultar la reputación de una IP o archivo?", o:["VirusTotal", "Wireshark", "Photoshop", "Zoom"], c:0, exp:"VirusTotal permite analizar archivos y URLs para consultar su reputación frente a múltiples motores antivirus."},
+  {t:"SOC e Investigación", q:"¿Qué servicio ayuda a verificar la reputación de direcciones IP maliciosas?", o:["AbuseIPDB", "Google Drive", "Dropbox", "Slack"], c:0, exp:"AbuseIPDB es un servicio que permite consultar y reportar direcciones IP con actividad maliciosa."},
+  {t:"Buenas Prácticas", q:"¿Por qué es importante actualizar el sistema operativo?", o:["Porque corrige vulnerabilidades de seguridad", "Porque mejora el diseño de los íconos", "Porque reduce el tamaño del disco", "Porque cambia el idioma automáticamente"], c:0, exp:"Las actualizaciones del sistema operativo corrigen vulnerabilidades de seguridad conocidas."},
+  {t:"Buenas Prácticas", q:"¿Qué principio recomienda otorgar únicamente los permisos necesarios?", o:["Principio de disponibilidad total", "Principio de mínimo privilegio", "Principio de redundancia", "Principio de anonimato"], c:1, exp:"El principio de mínimo privilegio recomienda otorgar solo los permisos estrictamente necesarios."},
+  {t:"Buenas Prácticas", q:"¿Qué significa cifrar información?", o:["Convertirla en un formato ilegible para quienes no tengan la clave", "Comprimir un archivo para ahorrar espacio", "Eliminar los metadatos de un archivo", "Duplicar la información en la nube"], c:0, exp:"Cifrar información significa convertirla en un formato ilegible sin la clave correspondiente."},
+  {t:"Buenas Prácticas", q:"¿Qué debes hacer antes de conectar una memoria USB desconocida?", o:["Conectarla directamente sin revisión", "Analizarla con un antivirus o evitar utilizarla", "Formatearla inmediatamente sin revisar", "Compartirla con otros equipos primero"], c:1, exp:"Es recomendable analizar la memoria con un antivirus o evitar usarla, ya que puede contener malware."},
+  {t:"Linux", q:"¿Qué comando muestra el directorio actual en Linux?", o:["ls", "pwd", "cd", "cp"], c:1, exp:"El comando pwd (print working directory) muestra el directorio actual."},
+  {t:"Linux", q:"¿Qué comando lista archivos en Linux?", o:["ls", "pwd", "rm", "mv"], c:0, exp:"El comando ls lista los archivos y carpetas de un directorio."},
+  {t:"Linux", q:"¿Qué comando cambia de directorio en Linux?", o:["cd", "cp", "mv", "rm"], c:0, exp:"El comando cd (change directory) permite cambiar de directorio."},
+  {t:"Linux", q:"¿Qué comando copia archivos en Linux?", o:["mv", "cp", "rm", "cd"], c:1, exp:"El comando cp copia archivos o directorios."},
+  {t:"Linux", q:"¿Qué comando mueve archivos en Linux?", o:["cp", "rm", "mv", "ls"], c:2, exp:"El comando mv mueve o renombra archivos y directorios."},
+  {t:"Linux", q:"¿Qué comando elimina archivos en Linux?", o:["rm", "cp", "mv", "pwd"], c:0, exp:"El comando rm elimina archivos o directorios."},
+  {t:"Conceptos Generales", q:"¿Qué significa hash?", o:["Un resumen criptográfico de longitud fija", "Una clave de cifrado reversible", "Un tipo de firewall", "Un protocolo de enrutamiento"], c:0, exp:"Un hash es un resumen criptográfico de longitud fija generado a partir de un dato."},
+  {t:"Conceptos Generales", q:"¿Puede un hash revertirse para recuperar el dato original?", o:["Sí, siempre", "No", "Solo con la clave privada", "Solo si es SHA-256"], c:1, exp:"Un hash es una función de un solo sentido: no puede revertirse para obtener el dato original."},
+  {t:"Conceptos Generales", q:"¿Qué algoritmo es un hash criptográfico?", o:["AES", "RSA", "SHA-256", "TLS"], c:2, exp:"SHA-256 es un algoritmo de hash criptográfico ampliamente utilizado."},
+  {t:"Conceptos Generales", q:"¿Qué algoritmo se utiliza para cifrado simétrico?", o:["RSA", "AES", "SHA-256", "ARP"], c:1, exp:"AES es un algoritmo de cifrado simétrico, donde se usa la misma clave para cifrar y descifrar."},
+  {t:"Conceptos Generales", q:"¿Qué algoritmo es común para criptografía asimétrica?", o:["AES", "RSA", "MD5", "DHCP"], c:1, exp:"RSA es un algoritmo común de criptografía asimétrica, basado en un par de claves pública y privada."},
+  {t:"Conceptos Generales", q:"¿Qué es un certificado digital?", o:["Un documento que vincula una identidad con una clave pública", "Una copia de seguridad cifrada", "Un tipo de firewall", "Un protocolo de enrutamiento"], c:0, exp:"Un certificado digital vincula una identidad con una clave pública, verificado por una autoridad certificadora."},
+  {t:"Conceptos Generales", q:"¿Qué entidad emite certificados digitales?", o:["Un ISP", "Una Autoridad Certificadora (CA)", "Un servidor DNS", "Un proxy"], c:1, exp:"Las Autoridades Certificadoras (CA) son las entidades que emiten certificados digitales."},
+  {t:"Conceptos Generales", q:"¿Qué significa VPN?", o:["Red Privada Virtual", "Red Pública Verificada", "Protocolo de Verificación de Nodos", "Válvula de Protección de Red"], c:0, exp:"VPN significa Red Privada Virtual."},
+  {t:"Conceptos Generales", q:"¿Para qué sirve una VPN?", o:["Crear una conexión segura sobre Internet", "Aumentar la velocidad de descarga", "Asignar direcciones IP automáticamente", "Traducir nombres de dominio"], c:0, exp:"Una VPN crea un túnel cifrado y seguro para las comunicaciones sobre una red pública como Internet."},
+  {t:"Conceptos Generales", q:"¿Qué es un dominio en Internet?", o:["Una dirección IP numérica", "Un nombre legible que identifica un sitio en Internet", "Un tipo de certificado digital", "Un protocolo de transferencia de archivos"], c:1, exp:"Un dominio es un nombre legible que identifica un sitio en Internet, asociado a una dirección IP."},
+  {t:"Conceptos Generales", q:"¿Qué diferencia existe entre una IP y un dominio?", o:["No hay diferencia, son lo mismo", "La IP identifica numéricamente un dispositivo; el dominio es un nombre asociado a esa IP", "El dominio es más rápido que la IP", "La IP solo se usa en redes locales"], c:1, exp:"La IP identifica numéricamente un dispositivo, mientras que el dominio es un nombre legible asociado a esa IP."},
+  {t:"Conceptos Generales", q:"¿Qué significa URL?", o:["Localizador Uniforme de Recursos", "Unidad de Registro Local", "Único Recurso de Linux", "Un tipo de protocolo de correo"], c:0, exp:"URL significa Localizador Uniforme de Recursos (Uniform Resource Locator)."},
+  {t:"Conceptos Generales", q:"¿Qué es un exploit?", o:["Un antivirus especializado", "Código o técnica que aprovecha una vulnerabilidad", "Un protocolo de cifrado", "Una copia de seguridad automática"], c:1, exp:"Un exploit es código o una técnica que aprovecha una vulnerabilidad para comprometer un sistema."},
+  {t:"Conceptos Generales", q:"¿Qué es una botnet?", o:["Una red de dispositivos comprometidos controlados por un atacante", "Un tipo de antivirus en la nube", "Un protocolo de enrutamiento dinámico", "Una herramienta de respaldo"], c:0, exp:"Una botnet es una red de dispositivos comprometidos que un atacante controla de forma remota."},
+];
+
+let questionPool = [];
+function refillPool(){
+  questionPool = [...QUESTIONS].sort(()=>Math.random()-0.5);
+}
+function nextQuestion(){
+  if(questionPool.length===0) refillPool();
+  return questionPool.pop();
+}
+
+/* ============================================================
+   TABLERO — Serpientes (hacker) y Escaleras (agente)
+   ============================================================ */
+const LADDERS = {4:25, 13:46, 33:49, 42:63, 50:69, 62:81, 74:92, 85:97};
+const SNAKES  = {27:5, 40:3, 54:31, 66:45, 76:58, 89:53, 95:72, 98:79};
+
+function cellPos(n){
+  const rowFromBottom = Math.floor((n-1)/10);
+  const posInRow = (n-1)%10;
+  const col = rowFromBottom%2===0 ? posInRow : 9-posInRow;
+  const displayRow = 9-rowFromBottom;
+  return {col, displayRow};
+}
+function cellCenterPct(n){
+  const {col, displayRow} = cellPos(n);
+  return { x:(col+0.5)/10*1000, y:(displayRow+0.5)/10*1000 };
+}
+
+/* Render board cells */
+const boardEl = document.getElementById('board');
+for(let n=1; n<=100; n++){
+  const {col, displayRow} = cellPos(n);
+  const div = document.createElement('div');
+  div.className = 'cell' + (((col+displayRow)%2===0)?' alt':'');
+  if(n===1) div.classList.add('start');
+  if(n===100) div.classList.add('finish');
+  div.style.gridColumn = (col+1);
+  div.style.gridRow = (displayRow+1);
+  div.innerHTML = `<span>${n}</span>`;
+  if(SNAKES[n]!==undefined){
+    const b = document.createElement('span'); b.className='badge head'; b.textContent='☠ hacker';
+    div.appendChild(b);
+  }
+  if(LADDERS[n]!==undefined){
+    const b = document.createElement('span'); b.className='badge foot'; b.textContent='🛡 agente';
+    div.appendChild(b);
+  }
+  boardEl.appendChild(div);
+}
+
+/* Draw snakes & ladders as SVG curves */
+const svg = document.getElementById('overlay');
+function drawConnections(){
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="gradSnake" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#ff3b5c"/>
+        <stop offset="100%" stop-color="#7a0f22"/>
+      </linearGradient>
+      <linearGradient id="gradLadder" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#00d9ff"/>
+        <stop offset="100%" stop-color="#0a5a6e"/>
+      </linearGradient>
+    </defs>`;
+  for(const [from,to] of Object.entries(SNAKES)){
+    const a = cellCenterPct(Number(from)), b = cellCenterPct(Number(to));
+    const midx = (a.x+b.x)/2 + (a.x>b.x? 60:-60);
+    const midy = (a.y+b.y)/2;
+    svg.innerHTML += `<path d="M ${a.x} ${a.y} Q ${midx} ${midy} ${b.x} ${b.y}" stroke="url(#gradSnake)" stroke-width="10" fill="none" stroke-linecap="round" opacity="0.85"/>`;
+    svg.innerHTML += `<circle cx="${a.x}" cy="${a.y}" r="12" fill="#ff3b5c"/>`;
+  }
+  for(const [from,to] of Object.entries(LADDERS)){
+    const a = cellCenterPct(Number(from)), b = cellCenterPct(Number(to));
+    svg.innerHTML += `<line x1="${a.x-14}" y1="${a.y}" x2="${b.x-14}" y2="${b.y}" stroke="url(#gradLadder)" stroke-width="6" stroke-linecap="round" opacity="0.9"/>`;
+    svg.innerHTML += `<line x1="${a.x+14}" y1="${a.y}" x2="${b.x+14}" y2="${b.y}" stroke="url(#gradLadder)" stroke-width="6" stroke-linecap="round" opacity="0.9"/>`;
+    const steps=5;
+    for(let i=1;i<steps;i++){
+      const t=i/steps;
+      const x1 = a.x-14 + (b.x-14-(a.x-14))*t;
+      const y1 = a.y + (b.y-a.y)*t;
+      const x2 = a.x+14 + (b.x+14-(a.x+14))*t;
+      const y2 = y1;
+      svg.innerHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#00d9ff" stroke-width="4" opacity="0.6"/>`;
+    }
+  }
+}
+drawConnections();
+
+/* ============================================================
+   ESTADO DEL JUEGO
+   ============================================================ */
+const tokensLayer = document.getElementById('tokensLayer');
+let players = [];
+let currentPlayer = 0;
+let pendingRoll = null;
+let gameActive = false;
+let isVsComputer = false;
+let cpuAccuracy = 0.6;
+let cpuTurnTimer = null;
+
+function makePlayers(count){
+  players = [];
+  const configs = [
+    {id:'p1', name:'Agente 1', color:'var(--p1)'},
+    {id:'p2', name:'Agente 2', color:'var(--p2)'},
+    {id:'p3', name:'Agente 3', color:'var(--p3)'},
+    {id:'p4', name:'Agente 4', color:'var(--p4)'}
+  ];
+  for(let i=0;i<count;i++){
+    players.push({...configs[i], pos:1, isCPU:false});
+    const t = document.createElement('div');
+    t.className = 'token ' + configs[i].id;
+    t.textContent = 'P'+(i+1);
+    t.id = 'token-'+configs[i].id;
+    tokensLayer.appendChild(t);
+  }
+}
+
+function makePlayersVsComputer(){
+  players = [];
+  const configs = [
+    {id:'p1', name:'Tú (Agente)', color:'var(--p1)', isCPU:false, cls:'p1', label:'TÚ'},
+    {id:'p2', name:'Computadora (IA)', color:'var(--hacker)', isCPU:true, cls:'p2 cpu-token', label:'IA'}
+  ];
+  configs.forEach(cfg=>{
+    players.push({id:cfg.id, name:cfg.name, color:cfg.color, isCPU:cfg.isCPU, pos:1});
+    const t = document.createElement('div');
+    t.className = 'token ' + cfg.cls;
+    t.textContent = cfg.label;
+    t.id = 'token-'+cfg.id;
+    tokensLayer.appendChild(t);
+  });
+}
+
+const TOKEN_OFFSETS = {
+  1: [[0,0]],
+  2: [[-3.2,0],[3.2,0]],
+  3: [[-3.2,-2.2],[3.2,-2.2],[0,3.2]],
+  4: [[-3.2,-3.2],[3.2,-3.2],[-3.2,3.2],[3.2,3.2]]
+};
+function placeToken(p, idx, total){
+  const el = document.getElementById('token-'+p.id);
+  const {col, displayRow} = cellPos(p.pos);
+  let x = (col+0.5)/10*100;
+  let y = (displayRow+0.5)/10*100;
+  const offs = TOKEN_OFFSETS[total] || TOKEN_OFFSETS[1];
+  const [dx,dy] = offs[idx] || [0,0];
+  x += dx; y += dy;
+  el.style.left = x+'%';
+  el.style.top = y+'%';
+  el.style.transform = 'translate(-50%,-50%)';
+}
+function refreshTokens(){
+  players.forEach((p,i)=>placeToken(p,i,players.length));
+}
+
+function renderPlayersBox(){
+  const box = document.getElementById('playersBox');
+  box.innerHTML='';
+  players.forEach((p,i)=>{
+    const row = document.createElement('div');
+    row.className = 'player-row' + (i===currentPlayer?' active':'');
+    row.innerHTML = `<div class="who"><span class="swatch" style="background:${p.color}"></span>${p.name}</div><div class="pos">casilla ${p.pos}</div>`;
+    box.appendChild(row);
+  });
+}
+
+function log(msg, cls){
+  const l = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = cls||'sys';
+  d.textContent = msg;
+  l.appendChild(d);
+  l.scrollTop = l.scrollHeight;
+}
+
+/* Dice */
+const DICE_FACES = {
+  1:[5], 2:[1,9], 3:[1,5,9], 4:[1,3,7,9], 5:[1,3,5,7,9], 6:[1,3,4,6,7,9]
+};
+function showDiceFace(n){
+  document.querySelectorAll('.pip').forEach(p=>p.classList.remove('on'));
+  (DICE_FACES[n]||[]).forEach(p=>{
+    document.querySelector(`.pip[data-p="${p}"]`).classList.add('on');
+  });
+}
+
+const rollBtn = document.getElementById('rollBtn');
+const diceEl = document.getElementById('dice');
+const statusLine = document.getElementById('statusLine');
+
+function performRoll(){
+  if(!gameActive) return;
+  rollBtn.disabled = true;
+  diceEl.classList.add('rolling');
+  let ticks = 0;
+  const interval = setInterval(()=>{
+    showDiceFace(1+Math.floor(Math.random()*6));
+    ticks++;
+    if(ticks>8){
+      clearInterval(interval);
+      diceEl.classList.remove('rolling');
+      const roll = 1+Math.floor(Math.random()*6);
+      showDiceFace(roll);
+      pendingRoll = roll;
+      const p = players[currentPlayer];
+      if(p.isCPU){
+        statusLine.innerHTML = `🤖 La computadora sacó <b>${roll}</b> y está verificando su acceso<span class="thinking-dots"></span>`;
+      } else {
+        statusLine.innerHTML = `${p.name} sacó <b>${roll}</b>. Responde la pregunta para avanzar.`;
+      }
+      openQuestion(roll);
+    }
+  }, 70);
+}
+
+rollBtn.addEventListener('click', ()=>{
+  if(!gameActive) return;
+  const p = players[currentPlayer];
+  if(p.isCPU) return; // el turno de la IA se ejecuta solo
+  performRoll();
+});
+
+/* Question modal */
+const modalBg = document.getElementById('modalBg');
+const qText = document.getElementById('qText');
+const qTag = document.getElementById('qTag');
+const optionsBox = document.getElementById('optionsBox');
+const feedback = document.getElementById('feedback');
+const continueBtn = document.getElementById('continueBtn');
+const stepsNeeded = document.getElementById('stepsNeeded');
+const modalTurnLabel = document.getElementById('modalTurnLabel');
+
+let currentQ = null;
+let currentSteps = 0;
+
+function openQuestion(steps){
+  currentSteps = steps;
+  currentQ = nextQuestion();
+  const p = players[currentPlayer];
+  modalTurnLabel.textContent = p.isCPU
+    ? `terminal://ia-verificacion-de-acceso`
+    : `terminal://${p.id}-verificacion-de-acceso`;
+  stepsNeeded.textContent = steps;
+  qTag.textContent = currentQ.t;
+  qText.innerHTML = currentQ.q + '<span class="cursor"></span>';
+  feedback.textContent='';
+  feedback.className='feedback';
+  continueBtn.style.display='none';
+  optionsBox.innerHTML='';
+  const letters = ['A','B','C','D'];
+  currentQ.o.forEach((opt, idx)=>{
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.innerHTML = `<span class="k">${letters[idx]}</span><span>${opt}</span>`;
+    if(p.isCPU){
+      b.disabled = true; // la IA responde sola, el humano no puede intervenir
+    } else {
+      b.addEventListener('click', ()=>answerQuestion(idx, b));
+    }
+    optionsBox.appendChild(b);
+  });
+  modalBg.classList.add('show');
+
+  if(p.isCPU){
+    feedback.innerHTML = `🤖 La IA está analizando la pregunta<span class="thinking-dots"></span>`;
+    feedback.className = 'feedback';
+    cpuTurnTimer = setTimeout(()=>simulateCPUAnswer(), 1400 + Math.random()*900);
+  }
+}
+
+function simulateCPUAnswer(){
+  const willBeCorrect = Math.random() < cpuAccuracy;
+  const idx = willBeCorrect ? currentQ.c : (currentQ.c+1+Math.floor(Math.random()*3))%currentQ.o.length;
+  answerQuestion(idx, null, true);
+}
+
+function answerQuestion(idx, btnEl, isCPUTurn){
+  const correct = idx === currentQ.c;
+  document.querySelectorAll('.opt').forEach((b,i)=>{
+    b.disabled = true;
+    if(i===currentQ.c) b.classList.add('correct');
+    if(i===idx && !correct) b.classList.add('wrong');
+  });
+  const p = players[currentPlayer];
+  const who = isCPUTurn ? '🤖 La computadora' : p.name;
+  if(correct){
+    feedback.innerHTML = `✔ ACCESO CONCEDIDO — ${isCPUTurn? 'la IA avanza':'avanzas'} ${currentSteps} casillas.<br>${currentQ.exp||''}`;
+    feedback.className='feedback good';
+    log(`${who} respondió correctamente (+${currentSteps}).`, 'good');
+  } else {
+    const correctText = currentQ.o[currentQ.c];
+    feedback.innerHTML = `✘ ACCESO DENEGADO — el hacker bloquea el avance. ${isCPUTurn? 'La IA no se mueve.':'No te mueves.'}<br><b>Respuesta correcta:</b> ${correctText}.<br>${currentQ.exp||''}`;
+    feedback.className='feedback bad';
+    log(`${who} falló la verificación y no avanza.`, 'bad');
+  }
+
+  if(isCPUTurn){
+    continueBtn.style.display='none';
+    cpuTurnTimer = setTimeout(()=>{
+      modalBg.classList.remove('show');
+      resolveMove(correct);
+    }, 1600);
+  } else {
+    continueBtn.style.display='inline-block';
+    continueBtn.onclick = ()=>{
+      modalBg.classList.remove('show');
+      resolveMove(correct);
+    };
+  }
+}
+
+function resolveMove(correct){
+  const p = players[currentPlayer];
+  if(correct){
+    let target = p.pos + currentSteps;
+    if(target>100){
+      target = p.pos; // debe caer exacto
+      log(`${p.name} necesita el número exacto para llegar a 100. Se mantiene en ${p.pos}.`,'sys');
+    } else {
+      p.pos = target;
+      refreshTokens();
+      renderPlayersBox();
+      checkSnakeLadder(p);
+    }
+  }
+  renderPlayersBox();
+  refreshTokens();
+
+  if(p.pos===100){
+    endGame(p);
+    return;
+  }
+  nextTurn();
+}
+
+function checkSnakeLadder(p){
+  setTimeout(()=>{
+    if(SNAKES[p.pos]!==undefined){
+      const dest = SNAKES[p.pos];
+      log(`⚠ ¡El hacker intercepta a ${p.name} en la casilla ${p.pos}! Retrocede a ${dest}.`,'bad');
+      p.pos = dest;
+      refreshTokens();
+      renderPlayersBox();
+    } else if(LADDERS[p.pos]!==undefined){
+      const dest = LADDERS[p.pos];
+      log(`🛡 El agente de ciberseguridad ayuda a ${p.name} en la casilla ${p.pos}. Avanza a ${dest}.`,'good');
+      p.pos = dest;
+      refreshTokens();
+      renderPlayersBox();
+    }
+  }, 350);
+}
+
+function nextTurn(){
+  currentPlayer = (currentPlayer+1) % players.length;
+  renderPlayersBox();
+  const p = players[currentPlayer];
+  if(p.isCPU){
+    rollBtn.disabled = true;
+    statusLine.innerHTML = `🤖 Turno de <b>${p.name}</b>. Preparando lanzamiento<span class="thinking-dots"></span>`;
+    cpuTurnTimer = setTimeout(()=>performRoll(), 1000 + Math.random()*700);
+  } else {
+    statusLine.innerHTML = `Turno de <b>${p.name}</b>. Lanza el dado.`;
+    rollBtn.disabled = false;
+  }
+}
+
+function endGame(p){
+  gameActive = false;
+  rollBtn.disabled = true;
+  clearTimeout(cpuTurnTimer);
+  document.getElementById('winTitle').textContent = p.isCPU
+    ? `¡LA COMPUTADORA ASEGURÓ LA RED!`
+    : `¡${p.name.toUpperCase()} ASEGURÓ LA RED!`;
+  document.getElementById('winText').textContent = p.isCPU
+    ? `La IA alcanzó la casilla 100 antes que tú. El hacker gana esta ronda.`
+    : `Alcanzó la casilla 100 y neutralizó al hacker. Partida finalizada.`;
+  document.getElementById('winBg').classList.add('show');
+  log(`🏆 ${p.name} llega a la casilla 100. ¡Red asegurada!`, 'good');
+}
+
+/* Setup */
+function startGame(count){
+  isVsComputer = false;
+  document.getElementById('setupPanel').style.display='none';
+  document.getElementById('gamePanel').style.display='block';
+  document.getElementById('dicePanel').style.display='block';
+  document.getElementById('log').innerHTML='';
+  refillPool();
+  makePlayers(count);
+  currentPlayer = 0;
+  gameActive = true;
+  renderPlayersBox();
+  refreshTokens();
+  showDiceFace(0);
+  log('Sistema iniciado. Defiende la red hasta llegar a la casilla 100.', 'sys');
+  log(`Turno de ${players[0].name}.`, 'sys');
+  statusLine.innerHTML = `Turno de <b>${players[0].name}</b>. Lanza el dado.`;
+}
+
+function startGameVsComputer(acc){
+  isVsComputer = true;
+  cpuAccuracy = acc;
+  document.getElementById('setupPanel').style.display='none';
+  document.getElementById('gamePanel').style.display='block';
+  document.getElementById('dicePanel').style.display='block';
+  document.getElementById('log').innerHTML='';
+  refillPool();
+  makePlayersVsComputer();
+  currentPlayer = 0;
+  gameActive = true;
+  renderPlayersBox();
+  refreshTokens();
+  showDiceFace(0);
+  const levelName = acc<=0.35?'Fácil':(acc<=0.6?'Normal':'Difícil');
+  log(`Sistema iniciado. Modo VS Computadora (dificultad: ${levelName}).`, 'sys');
+  log('Defiende la red hasta llegar a la casilla 100 antes que la IA.', 'sys');
+  log(`Turno de ${players[0].name}.`, 'sys');
+  statusLine.innerHTML = `Turno de <b>${players[0].name}</b>. Lanza el dado.`;
+}
+
+document.querySelectorAll('.players-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>startGame(parseInt(btn.dataset.n,10)));
+});
+
+document.querySelectorAll('.difficulty-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>startGameVsComputer(parseFloat(btn.dataset.acc)));
+});
+
+const modeStep = document.getElementById('modeStep');
+const humanStep = document.getElementById('humanStep');
+const cpuStep = document.getElementById('cpuStep');
+
+document.querySelectorAll('.mode-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    modeStep.style.display = 'none';
+    if(btn.dataset.mode === 'human'){
+      humanStep.style.display = 'block';
+    } else {
+      cpuStep.style.display = 'block';
+    }
+  });
+});
+
+document.querySelectorAll('.back-step-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    humanStep.style.display = 'none';
+    cpuStep.style.display = 'none';
+    modeStep.style.display = 'block';
+  });
+});
+
+function resetAll(){
+  clearTimeout(cpuTurnTimer);
+  document.getElementById('setupPanel').style.display='block';
+  modeStep.style.display = 'block';
+  humanStep.style.display = 'none';
+  cpuStep.style.display = 'none';
+  document.getElementById('gamePanel').style.display='none';
+  document.getElementById('dicePanel').style.display='none';
+  document.getElementById('winBg').classList.remove('show');
+  tokensLayer.innerHTML='';
+  document.getElementById('log').innerHTML='';
+  gameActive=false;
+  isVsComputer=false;
+}
+document.getElementById('restartBtn').addEventListener('click', resetAll);
+document.getElementById('winRestart').addEventListener('click', resetAll);
+
+window.addEventListener('resize', refreshTokens);
+</script>
+</body>
+</html>
